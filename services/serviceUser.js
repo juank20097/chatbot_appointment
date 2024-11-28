@@ -1,68 +1,85 @@
 // services/UserService.js
-const pool = require('../utilities/db'); // Importa la configuración de la base de datos
 const User = require('../models/user'); // Importa el modelo User
 
 class UserService {
     // Obtener un usuario por DNI
     async getUserByDni(dni) {
+        const sqlQuery = 'SELECT * FROM users WHERE dni = $1';
         try {
-            const result = await pool.query('SELECT * FROM users WHERE dni = $1', [dni]);
+            await this.connect();
+            const result = await this.executeQuery(sqlQuery, [dni]);
             if (result.rows.length === 0) {
-                return null;
+                return null; // Si no hay resultados, devolvemos null
             }
-            return new User(result.rows[0]).toUserData(); // Devuelve los datos del usuario
-        } catch (err) {
-            console.error(err);
-            throw new Error('Error al obtener el usuario');
+            return result.rows[0]; // Devuelve el registro encontrado
+        } catch (error) {
+            console.error('Error al obtener el usuario:', error);
+            throw error;
+        } finally {
+            await this.disconnect();
         }
     }
 
-    // Crear un nuevo usuario
+
     async createUser(dni, name, email, cellphone) {
-        const newUser = new User({ dni, name, email, cellphone });
-
+        const sqlQuery = `
+            INSERT INTO users (dni, name, email, cellphone) 
+            VALUES ($1, $2, $3, $4) 
+            RETURNING *;
+        `;
         try {
-            const result = await pool.query(
-                'INSERT INTO users (dni, name, email, cellphone) VALUES ($1, $2, $3, $4) RETURNING *',
-                [newUser.dni, newUser.name, newUser.email, newUser.cellphone]
-            );
-            return new User(result.rows[0]).toUserData(); // Devuelve el usuario creado
-        } catch (err) {
-            console.error(err);
-            throw new Error('Error al crear el usuario');
+            await this.connect();
+            const result = await this.executeQuery(sqlQuery, [dni, name, email, cellphone]);
+            return result.rows[0]; // Devuelve el usuario creado
+        } catch (error) {
+            console.error('Error al crear el usuario:', error);
+            throw error;
+        } finally {
+            await this.disconnect();
         }
     }
 
-    // Actualizar un usuario por DNI
     async updateUser(dni, name, email, cellphone) {
-        const updatedUser = new User({ dni, name, email, cellphone });
-
+        const sqlQuery = `
+            UPDATE users 
+            SET name = $1, email = $2, cellphone = $3 
+            WHERE dni = $4 
+            RETURNING *;
+        `;
         try {
-            const result = await pool.query(
-                'UPDATE users SET name = $1, email = $2, cellphone = $3 WHERE dni = $4 RETURNING *',
-                [updatedUser.name, updatedUser.email, updatedUser.cellphone, dni]
-            );
+            await this.connect();
+            const result = await this.executeQuery(sqlQuery, [name, email, cellphone, dni]);
             if (result.rows.length === 0) {
                 throw new Error('Usuario no encontrado');
             }
-            return new User(result.rows[0]).toUserData(); // Devuelve el usuario actualizado
-        } catch (err) {
-            console.error(err);
-            throw new Error('Error al actualizar el usuario');
+            return result.rows[0]; // Devuelve el usuario actualizado
+        } catch (error) {
+            console.error('Error al actualizar el usuario:', error);
+            throw error;
+        } finally {
+            await this.disconnect();
         }
     }
 
     // Eliminar un usuario por DNI
     async deleteUser(dni) {
+        const sqlQuery = `
+            DELETE FROM users 
+            WHERE dni = $1 
+            RETURNING *;
+        `;
         try {
-            const result = await pool.query('DELETE FROM users WHERE dni = $1 RETURNING *', [dni]);
+            await this.connect();
+            const result = await this.executeQuery(sqlQuery, [dni]);
             if (result.rows.length === 0) {
                 throw new Error('Usuario no encontrado');
             }
             return { message: 'Usuario eliminado', user: result.rows[0] }; // Devuelve el usuario eliminado
-        } catch (err) {
-            console.error(err);
-            throw new Error('Error al eliminar el usuario');
+        } catch (error) {
+            console.error('Error al eliminar el usuario:', error);
+            throw error;
+        } finally {
+            await this.disconnect();
         }
     }
 }
