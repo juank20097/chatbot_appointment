@@ -1,13 +1,14 @@
-// services/UserService.js
-const User = require('../models/user'); // Importa el modelo User
+const Connection = require('../utilities/Connection'); // Importa la clase Connection
+
+const dbService = new Connection(); // Instancia de la clase Connection
 
 class UserService {
     // Obtener un usuario por DNI
     async getUserByDni(dni) {
         const sqlQuery = 'SELECT * FROM users WHERE dni = $1';
         try {
-            await this.connect();
-            const result = await this.executeQuery(sqlQuery, [dni]);
+            // Ejecutar la consulta usando el pool de conexiones
+            const result = await dbService.executeQuery(sqlQuery, [dni]);
             if (result.rows.length === 0) {
                 return null; // Si no hay resultados, devolvemos null
             }
@@ -15,11 +16,8 @@ class UserService {
         } catch (error) {
             console.error('Error al obtener el usuario:', error);
             throw error;
-        } finally {
-            await this.disconnect();
         }
     }
-
 
     async createUser(dni, name, email, cellphone) {
         const sqlQuery = `
@@ -28,14 +26,12 @@ class UserService {
             RETURNING *;
         `;
         try {
-            await this.connect();
-            const result = await this.executeQuery(sqlQuery, [dni, name, email, cellphone]);
+            // Ejecutar la consulta usando el pool de conexiones
+            const result = await dbService.executeQuery(sqlQuery, [dni, name, email, cellphone]);
             return result.rows[0]; // Devuelve el usuario creado
         } catch (error) {
             console.error('Error al crear el usuario:', error);
             throw error;
-        } finally {
-            await this.disconnect();
         }
     }
 
@@ -47,8 +43,8 @@ class UserService {
             RETURNING *;
         `;
         try {
-            await this.connect();
-            const result = await this.executeQuery(sqlQuery, [name, email, cellphone, dni]);
+            // Ejecutar la consulta usando el pool de conexiones
+            const result = await dbService.executeQuery(sqlQuery, [name, email, cellphone, dni]);
             if (result.rows.length === 0) {
                 throw new Error('Usuario no encontrado');
             }
@@ -56,8 +52,6 @@ class UserService {
         } catch (error) {
             console.error('Error al actualizar el usuario:', error);
             throw error;
-        } finally {
-            await this.disconnect();
         }
     }
 
@@ -69,8 +63,8 @@ class UserService {
             RETURNING *;
         `;
         try {
-            await this.connect();
-            const result = await this.executeQuery(sqlQuery, [dni]);
+            // Ejecutar la consulta usando el pool de conexiones
+            const result = await dbService.executeQuery(sqlQuery, [dni]);
             if (result.rows.length === 0) {
                 throw new Error('Usuario no encontrado');
             }
@@ -78,8 +72,6 @@ class UserService {
         } catch (error) {
             console.error('Error al eliminar el usuario:', error);
             throw error;
-        } finally {
-            await this.disconnect();
         }
     }
 }

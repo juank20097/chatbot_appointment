@@ -20,7 +20,7 @@ let startTimeF = '';
 let endTimeF = '';
 let dni = '';
 
-function startInactivityTimer(userId, gotoFlow, ctx) {
+function startInactivityTimer(userId, gotoFlow, flowDynamic, ctx) {
     // Si ya existe un temporizador para este usuario, lo limpiamos.
     if (sessions[userId]?.timeout) {
         clearTimeout(sessions[userId].timeout);
@@ -29,9 +29,12 @@ function startInactivityTimer(userId, gotoFlow, ctx) {
     // Configuramos un nuevo temporizador de 5 minutos.
     sessions[userId] = {
         ...sessions[userId],
-        timeout: setTimeout(() => {
+        timeout: setTimeout(async () => {
             console.log(`⏳ Tiempo de inactividad excedido para el usuario: ${userId}`);
-            gotoFlow(flowCierre).then(() => {
+
+            await flowDynamic('⏳ Tiempo de inactividad excedido......');
+
+            await gotoFlow(flowCierre).then(() => {
                 console.log(`🔄 Redirigiendo a flowCierre para: ${userId}`);
             });
         }, 300000), // 5 minutos en milisegundos
@@ -47,38 +50,24 @@ function clearInactivityTimer(userId) {
 
 /*------------------------------Métodos de cierre de sessión------------------------------------*/
 
-const flowCierre = addKeyword([''])
+const flowCierre = addKeyword(['2', 'no'])
     .addAnswer(
-        '⏳ Tiempo de inactividad excedido......',
+        '¡Gracias por comunicarte! 😊 Si necesitas algo más, no dudes en contactarnos.',
         async (ctx) => {
             const userId = ctx.from;
             clearInactivityTimer(userId); // Limpia el temporizador de este usuario.
         })
     .addAnswer(
-        '¡Gracias por comunicarte! 😊 Si necesitas algo más, no dudes en contactarnos.')
-    .addAnswer(
         '👨‍💻 *Información del Desarrollador:* \n' +
         '📛 *Nombre:* Juan Carlos Estévez Hidalgo \n' +
         '📧 *Correo:* juank20097@gmail.com \n' +
         '📱 *Teléfono:* +593 980365958 \n' +
         '📂 *Repositorio GitHub:* https://github.com/juank20097 \n')
 
-const flowSigner = addKeyword([''])
-    .addAnswer(
-        '✅ El proceso ha finalizado con éxito.')
-    .addAnswer(
-        '👨‍💻 *Información del Desarrollador:* \n' +
-        '📛 *Nombre:* Juan Carlos Estévez Hidalgo \n' +
-        '📧 *Correo:* juank20097@gmail.com \n' +
-        '📱 *Teléfono:* +593 980365958 \n' +
-        '📂 *Repositorio GitHub:* https://github.com/juank20097 \n')
-
-const flowClose = addKeyword('')
-    .addAnswer(
-        '🎉 ¡Cita agendada con éxito! 📅 Revisa tu correo para más detalles.'
-    )
+const flowAgain = addKeyword('')
     .addAnswer([
-        '🔄 *¿Hay algo más en lo que pueda ayudarte? 😊*',
+        '*¿Hay algo más en lo que pueda ayudarte? 😊*',
+        '',
         '👉 *1.* Sí',
         '👉 *2.* No'
     ],
@@ -87,9 +76,9 @@ const flowClose = addKeyword('')
             const respuesta = ctx.body.trim();
             console.log('✅ ayuda capturada:', respuesta);
             if (respuesta === '1' || respuesta === 'si' || respuesta === 'SI' || respuesta === 'Si') {
-                return gotoFlow(flowPrincipal);
+                return gotoFlow(flowOpciones);
             } else if (respuesta === '2' || respuesta === 'no' || respuesta === 'No' || respuesta === 'NO') {
-                return gotoFlow(flowSigner);
+                return gotoFlow(flowCierre);
             } else {
                 return fallBack();
             }
@@ -97,35 +86,68 @@ const flowClose = addKeyword('')
     )
 
 /*--------------------------------flows de Cierre y Despedida------------------------------------------------*/
-const flowValidateDni2 = addKeyword(dni)
-    .addAnswer([
-        '🔄 *¿El dato ingresado es correcto?*',
-        '👉 *1.* Sí',
-        '👉 *2.* No'
-    ],
-        { capture: true },
-        async (ctx, { fallBack, gotoFlow, flowDynamic }) => {
-            const userId = ctx.from;
-            startInactivityTimer(userId, gotoFlow, ctx);
 
-            const respuesta = ctx.body.trim(); // Captura el DNI ingresado por el usuario
-            console.log('✅ validación capturada:', respuesta);
-            if (respuesta === '1' || respuesta === 'si' || respuesta === 'SI' || respuesta === 'Si') {
-                user = await serviceCalendar.
-                console.log(user);
-            } else if (respuesta === '2' || respuesta === 'no' || respuesta === 'No' || respuesta === 'NO') {
-                await flowDynamic('🚨 Lamento que el dato este incorrecto. ¡Intentémoslo de nuevo! 🔄')
-                return gotoFlow(flowDni);
+/*--------------------------------4) Cancelar Cita------------------------------------------------*/
+
+/*--------------------------------3) Cambiar Cita------------------------------------------------*/
+const flowBuscarCita = addKeyword([''])
+    .addAction(async (ctx, { gotoFlow, flowDynamic }) => {
+        const userId = ctx.from;
+        startInactivityTimer(userId, gotoFlow, flowDynamic, ctx); // Asegúrate de tener implementado `startInactivityTimer`
+
+        try {
+            console.log(dni);
+            // Llamada al servicio para buscar el evento
+            const data = await serviceCalendar.searchEventByDni(dni);
+            console.log(data);
+
+            if (data.items && data.items.length > 0) {
+
+                const user = await serviceUser.getUserByDni(dni); // Asegúrate de tener este servicio configurado
+                const userName = user ? user.name : 'usuario';
+
+                // Saludo al usuario con su nombre
+                await flowDynamic(
+                    `👋 Hola, ${userName}! Aquí tienes las citas agendadas:`
+                );
+                const now = new Date();
+                // Itera sobre todos los eventos encontrados
+                for (let event of data.items) {
+                    const eventDateTime = new Date(event.start.dateTime);
+                    // Validar si la hora del evento es posterior a la hora actual
+                    if (eventDateTime > now) {
+                        const formattedDate = utilities.formatDateTime(event.start.dateTime);
+                        // Envia un mensaje por cada evento válido
+                        await flowDynamic(
+                            `📌 Cita: *${event.summary}*\n` +
+                            `📄 Descripción: *${event.description}*\n` +
+                            `⏰ Hora de la Cita: *${formattedDate}*\n`
+                        );
+                    }
+                }
+                await flowDynamic('🤝 Te esperamos con mucho gusto!')
+                // Luego, si el evento fue encontrado, retornamos el flujo correspondiente
+                return gotoFlow(flowClose);
             } else {
-                return fallBack();
+                // No se encontró cita
+                await flowDynamic(
+                    '❌ No existe ninguna cita agendada con esa cédula o pasaporte.'
+                );
+                return gotoFlow(flowAgain);
             }
+        } catch (error) {
+            // Manejo de errores
+            console.error('Error al buscar eventos:', error.message);
+            return await flowDynamic(
+                '⚠️ Ocurrió un error al buscar la cita. Por favor, intenta nuevamente más tarde.'
+            );
         }
-    );
+    });
 
 const flowVerificar = addKeyword(['2'])
-    .addAction((ctx, { gotoFlow }) => {
+    .addAction((ctx, { gotoFlow, flowDynamic }) => {
         const userId = ctx.from;
-        startInactivityTimer(userId, gotoFlow, ctx);
+        startInactivityTimer(userId, gotoFlow, flowDynamic, ctx);
         dni = '';
     })
     .addAnswer(['📄 Por favor, ingresa tu número de cédula o pasaporte para buscar la cita respectiva. 🔍',
@@ -133,22 +155,25 @@ const flowVerificar = addKeyword(['2'])
         { capture: true },
         async (ctx, { gotoFlow, flowDynamic }) => {
             const userId = ctx.from;
-            startInactivityTimer(userId, gotoFlow, ctx);
+            startInactivityTimer(userId, gotoFlow, flowDynamic, ctx);
             dni = ctx.body.trim();
             console.log('✅ DNI capturada:', dni);
-            return await flowDynamic('✅ Has ingresado el dato: ' + dni);
         },
-        [flowValidateDni2]
+        [flowBuscarCita]
     )
 
 /*--------------------------------------------2) Verificar-------------------------------------------------------------*/
 const flowEmail = addKeyword('')
+    .addAction((ctx, { gotoFlow, flowDynamic }) => {
+        const userId = ctx.from;
+        startInactivityTimer(userId, gotoFlow, flowDynamic, ctx);
+    })
     .addAnswer(
         `¡Gracias, ${user.name}! 🙏 Por favor, ingresa tu correo para enviarte los detalles de tu cita.`,
         { capture: true },
         async (ctx, { gotoFlow, flowDynamic }) => {
             const userId = ctx.from;
-            startInactivityTimer(userId, gotoFlow, ctx);
+            startInactivityTimer(userId, gotoFlow, flowDynamic, ctx);
 
             const respuesta = ctx.body.trim(); // Captura el DNI ingresado por el usuario
             console.log('✅ correo capturada:', respuesta);
@@ -156,30 +181,23 @@ const flowEmail = addKeyword('')
             user.cellphone = ctx.from.split('@')[0];
             await flowDynamic('✅ Has ingresado el correo: ' + user.email);
             await serviceUser.createUser(user.dni, user.name, user.email, user.cellphone);
-            return await serviceCalendar.createEvent(user.name, user.dni, user.email, date, startTimeF, endTimeF);
+            await serviceCalendar.createEvent(user.name, user.dni, user.email, date, startTimeF, endTimeF);
+            return await flowDynamic('🎉 ¡Cita agendada con éxito! 📅 Revisa tu correo para más detalles.');
         },
-        [flowClose]
+        [flowAgain]
     )
 
 const flowUser = addKeyword('1', 'si')
-    .addAction(async (ctx, { flowDynamic, gotoFlow }) => {
+    .addAction((ctx, { gotoFlow, flowDynamic }) => {
         const userId = ctx.from;
-        startInactivityTimer(userId, gotoFlow, ctx);
-
-        if (user !== null) {
-            await flowDynamic(`¡Hola ${user.name}! 👋 Un placer tenerte de nuevo.`)
-            await serviceCalendar.createEvent(user.name, user.dni, user.email, date, startTimeF, endTimeF);
-            return gotoFlow(flowClose);
-        } else {
-            user = new User();
-        }
+        startInactivityTimer(userId, gotoFlow, flowDynamic, ctx);
     })
     .addAnswer(
-        '❌ No te encontramos en nuestro sistema. 😔 Ingresa tu nombre completo, por favor.',
+        ' Ingresa tu nombre completo, por favor. 😊',
         { capture: true },
-        async (ctx, {  gotoFlow, flowDynamic }) => {
+        async (ctx, { gotoFlow, flowDynamic }) => {
             const userId = ctx.from;
-            startInactivityTimer(userId, gotoFlow, ctx);
+            startInactivityTimer(userId, gotoFlow, flowDynamic, ctx);
             const respuesta = ctx.body.trim(); // Captura el DNI ingresado por el usuario
             console.log('✅ nombre capturada:', respuesta);
             user.dni = dni;
@@ -189,25 +207,61 @@ const flowUser = addKeyword('1', 'si')
         [flowEmail]
     )
 
+const flowCreate = addKeyword('')
+    .addAction(async (ctx, { flowDynamic, gotoFlow }) => {
+        const userId = ctx.from;
+        startInactivityTimer(userId, gotoFlow, flowDynamic, ctx);
 
-const flowValidateDni = addKeyword(dni)
-    .addAnswer([
-        '🔄 *¿El dato ingresado es correcto?*',
-        '👉 *1.* Sí',
-        '👉 *2.* No'
-    ],
+        user = await serviceUser.getUserByDni(dni);
+        if (user !== null) {
+            await flowDynamic(`¡Hola ${user.name}! 👋 Un placer tenerte de nuevo.`)
+            if (process.env.OtherEvent === 'false') {
+                try {
+                    // Buscar eventos de la cédula desde la fecha actual
+                    const events = await serviceCalendar.searchEventByDni(dni);
+                    if (events.items && events.items.length > 0) {
+                        // Si existen eventos, mostrar los eventos encontrados
+                        await flowDynamic('🔔 Al parecer tu ya tienes una cita con nosotros:')
+                        for (let event of events.items) {
+                            const formattedDate = utilities.formatDateTime(event.start.dateTime);
+                            await flowDynamic(
+                                `📌 Cita: *${event.summary}*\n` +
+                                `📝 Descripción: *${event.description}*\n` +
+                                `⏰ Hora de la Cita: *${formattedDate}*\n`
+                            );
+                        }
+                        await flowDynamic('🤝 Te esperamos con mucho gusto!')
+                        // Luego, si el evento fue encontrado, retornamos el flujo correspondiente
+                        return gotoFlow(flowClose); // Continúa al siguiente flujo (por ejemplo, para crear un evento)
+                    }
+                } catch (error) {
+                    console.error('Error al buscar eventos:', error.message);
+                    await flowDynamic('⚠️ Hubo un error al buscar el evento. Por favor, intenta nuevamente más tarde.');
+                    return gotoFlow(flowClose);
+                }
+            }
+            await serviceCalendar.createEvent(user.name, user.dni, user.email, date, startTimeF, endTimeF);
+            await flowDynamic('🎉 ¡Cita agendada con éxito! 📅 Revisa tu correo para más detalles.');
+            return gotoFlow(flowClose);
+        } else {
+            user = new User();
+            await flowDynamic('❌ Al parecer no te tenemos registrado con nosotros.');
+        }
+    })
+    .addAnswer(
+        `¿El dato ingresado es correcto?\n\n👉 *1.* Sí\n👉 *2.* No`,
         { capture: true },
-        async (ctx, { fallBack, gotoFlow, flowDynamic }) => {
+        async (ctx, { flowDynamic, gotoFlow, fallBack }) => {
             const userId = ctx.from;
-            startInactivityTimer(userId, gotoFlow, ctx);
+            startInactivityTimer(userId, gotoFlow, flowDynamic, ctx);
 
             const respuesta = ctx.body.trim(); // Captura el DNI ingresado por el usuario
             console.log('✅ validación capturada:', respuesta);
+
             if (respuesta === '1' || respuesta === 'si' || respuesta === 'SI' || respuesta === 'Si') {
-                user = await serviceUser.getUserByDni(dni);
-                console.log(user);
+                console.log('✅ usuario no existente en la BDD')
             } else if (respuesta === '2' || respuesta === 'no' || respuesta === 'No' || respuesta === 'NO') {
-                await flowDynamic('🚨 Lamento que el dato este incorrecto. ¡Intentémoslo de nuevo! 🔄')
+                await flowDynamic('❌ Lamento que el dato esté incorrecto. ¡Intentémoslo de nuevo! 🔄')
                 return gotoFlow(flowDni);
             } else {
                 return fallBack();
@@ -216,28 +270,31 @@ const flowValidateDni = addKeyword(dni)
         [flowUser]
     );
 
+
 const flowDni = addKeyword(['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+    .addAction((ctx, { gotoFlow, flowDynamic }) => {
+        const userId = ctx.from;
+        startInactivityTimer(userId, gotoFlow, flowDynamic, ctx);
+    })
     .addAnswer(['🌟 ¡Estamos casi listos!',
         '',
-        'Por favor, comparte tu número de cédula de identidad o pasaporte para completar tu agendamiento. 😊'
+        'Por favor, ingresa tu cédula o pasaporte para continuar con el agendamiento. 😊'
     ],
         { capture: true },
         async (ctx, { flowDynamic, gotoFlow }) => {
             const userId = ctx.from;
-            startInactivityTimer(userId, gotoFlow, ctx);
+            startInactivityTimer(userId, gotoFlow, flowDynamic, ctx);
 
-            if (!ctx.session) ctx.session = {}; // Asegurarse de que ctx.session esté inicializado
             dni = ctx.body.trim();
             console.log('✅ DNI capturado:', dni);
-            return await flowDynamic('✅ Has ingresado el dato: ' + dni);
         },
-        [flowValidateDni]
+        [flowCreate]
     );
 
 const flowValidateDate = addKeyword([date])
     .addAction(async (ctx, { flowDynamic, gotoFlow }) => {
         const userId = ctx.from;
-        startInactivityTimer(userId, gotoFlow, ctx);
+        startInactivityTimer(userId, gotoFlow, flowDynamic, ctx);
         if (!utilities.validateDateFormat(date)) {
             await flowDynamic('⚠️ *Ups... Algo no está bien.* La fecha que ingresaste no está en formato válida.');
             return gotoFlow(flowAgendar);
@@ -304,7 +361,7 @@ const flowValidateDate = addKeyword([date])
     ], { capture: true },
         async (ctx, { flowDynamic, gotoFlow }) => {
             const userId = ctx.from;
-            startInactivityTimer(userId, gotoFlow, ctx);
+            startInactivityTimer(userId, gotoFlow, flowDynamic, ctx);
             const respuesta = ctx.body.trim();
             console.log('✅ Respuesta capturada:', respuesta);
 
@@ -326,9 +383,9 @@ const flowValidateDate = addKeyword([date])
     );
 
 const flowAgendar = addKeyword(['1'])
-    .addAction((ctx, { gotoFlow }) => {
+    .addAction((ctx, { gotoFlow, flowDynamic }) => {
         const userId = ctx.from;
-        startInactivityTimer(userId, gotoFlow, ctx);
+        startInactivityTimer(userId, gotoFlow, flowDynamic, ctx);
         user = new User();
         date = '';
         view_options = '';
@@ -342,9 +399,9 @@ const flowAgendar = addKeyword(['1'])
         'Por favor, asegúrate de escribir la fecha en el siguiente formato: *(DD/MM/AAAA)*.'
     ],
         { capture: true },
-        async (ctx, { gotoFlow }) => {
+        async (ctx, { gotoFlow, flowDynamic }) => {
             const userId = ctx.from;
-            startInactivityTimer(userId, gotoFlow, ctx);
+            startInactivityTimer(userId, gotoFlow, flowDynamic, ctx);
             const respuesta = ctx.body.trim();
             console.log('✅ Fecha capturada:', respuesta);
             date = respuesta;
@@ -354,10 +411,38 @@ const flowAgendar = addKeyword(['1'])
 
 /*-----------------------------------1) Agendar----------------------------------*/
 
-const flowPrincipal = addKeyword(['citas'])
-    .addAction((ctx, { gotoFlow }) => {
+const flowOpciones = addKeyword(['1', 'si'])
+    .addAction((ctx, { gotoFlow, flowDynamic }) => {
         const userId = ctx.from;
-        startInactivityTimer(userId, gotoFlow, ctx); // Inicia o reinicia el temporizador.
+        startInactivityTimer(userId, gotoFlow, flowDynamic, ctx);
+    })
+    .addAnswer([
+        '📌 Por favor, ingresa el número de la opción que deseas realizar:',
+        '',
+        '1️⃣ Agendar Cita 📅',
+        '2️⃣ Verificar Cita 🔍',
+        '3️⃣ Cambiar Cita 🔄',
+        '4️⃣ Cancelar Cita ❌ '
+    ],
+        { capture: true },
+        async (ctx, { fallBack, gotoFlow, flowDynamic }) => {
+            const userId = ctx.from;
+            startInactivityTimer(userId, gotoFlow, flowDynamic, ctx);
+
+            const respuesta = ctx.body.trim();
+            console.log('✅ Respuesta capturada flujo principal:', respuesta);
+
+            if (!['1', '2', '3', '4'].includes(respuesta)) {
+                return fallBack();
+            }
+        },
+        [flowAgendar, flowVerificar]
+    )
+
+const flowPrincipal = addKeyword(['citas'])
+    .addAction((ctx, { gotoFlow, flowDynamic }) => {
+        const userId = ctx.from;
+        startInactivityTimer(userId, gotoFlow, flowDynamic, ctx);
     })
     .addAnswer('👋 ¡Hola! Bienvenido al sistema de agendamiento de citas.')
     .addAnswer('Soy SON 🤖, tu asistente virtual, y estaré encantado de ayudarte a coordinar tu cita de manera rápida y sencilla. 📅✨ Vamos a comenzar.')
@@ -370,11 +455,11 @@ const flowPrincipal = addKeyword(['citas'])
         '4️⃣ Cancelar Cita ❌ '
     ],
         { capture: true },
-        async (ctx, { fallBack, gotoFlow }) => {
+        async (ctx, { fallBack, gotoFlow, flowDynamic }) => {
             const userId = ctx.from;
             const respuesta = ctx.body.trim();
             console.log('✅ Respuesta capturada flujo principal:', respuesta);
-            startInactivityTimer(userId, gotoFlow, ctx);
+            startInactivityTimer(userId, gotoFlow, flowDynamic, ctx);
 
             if (!['1', '2', '3', '4'].includes(respuesta)) {
                 return fallBack();

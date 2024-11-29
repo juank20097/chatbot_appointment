@@ -45,7 +45,7 @@ class CalendarService {
             const endDate = utilities.castDate(date) + 'T'+endTime+':00.000';
             // Instanciamos un objeto de la clase Event con los detalles proporcionados
             const event = new Event({
-                summary: 'Cita de atención: ' + process.env.ORG + ' para ' + name,
+                summary: 'Atención en: ' + process.env.ORG + ' para ' + name,
                 description: dni + ' - Agenda de Atención.',
                 location: process.env.LOCALIZACION,
                 start: { dateTime: startDate, timeZone: 'America/Guayaquil' },
@@ -72,13 +72,20 @@ class CalendarService {
     // Método para buscar un evento por palabras clave en la descripción
     async searchEventByDni(dni) {
         try {
+            const now = new Date().toISOString();
             // Obtiene los datos utilizando getData
-            const data = await this.apiService.getData('/calendars/'+process.env.CALENDAR+'/events?q='+dni);
+            const data = await this.apiService.getData('/calendars/'+process.env.CALENDAR+'/events?q='+dni+'&timeMin='+now);
             if (data.items && data.items.length > 0) {
-                const event = data.items[0]; // Tomamos el primer evento disponible
-                console.log(`Tema: ${event.summary}\nDescripción: ${event.description}\nHora de Cita: ${utilities.formatDateTime(event.start.dateTime)}`);
+                // Itera sobre todos los eventos encontrados
+            data.items.forEach((event) => {
+                const formattedDate = utilities.formatDateTime(event.start.dateTime);
+                console.log(`📅 Tema: ${event.summary}`);
+                console.log(`📝 Descripción: ${event.description}`);
+                console.log(`⏰ Hora de Cita: ${formattedDate}`);
+                console.log('-----------------------------------------');
+            });
             }else{
-                console.log('No existe Ninguna cita agendada con esa cédula');
+                return 0;
             }
             return data;
         } catch (error) {

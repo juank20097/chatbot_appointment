@@ -1,9 +1,9 @@
 require('dotenv').config();
 
-const DatabaseService = require('./utilities/DatabaseService');
-const dbService = new DatabaseService();
+const Connection = require('./utilities/Connection');
+const dbService = new Connection();
 
-const { createBot, createProvider, createFlow} = require('@bot-whatsapp/bot')
+const { createBot, createProvider, createFlow } = require('@bot-whatsapp/bot')
 
 const QRPortalWeb = require('@bot-whatsapp/portal')
 const BaileysProvider = require('@bot-whatsapp/provider/baileys')
@@ -26,14 +26,32 @@ const main = async () => {
         database: adapterDB,
     })
     QRPortalWeb();
+    const sqlQuery1 = `
+        CREATE TABLE IF NOT EXISTS users (
+            dni VARCHAR(255) PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            email VARCHAR(255) NOT NULL,
+            cellphone VARCHAR(255) NOT NULL,
+            created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );`;
+    await dbService.executeQuery(sqlQuery1);
+    console.log('🆗 Tabla users existe o fue creada con éxito')
+
+
     const intervalId = setInterval(async () => {
         try {
-            await dbService.pre_querys_sql();
+            const sqlQuery = `
+            ALTER TABLE history
+            ALTER COLUMN refserialize DROP NOT NULL,
+            ALTER COLUMN answer DROP NOT NULL;
+        `;
+            await dbService.executeQuery(sqlQuery);
+            console.log('🆗 Alter Table fue ejecutado con éxito')
             clearInterval(intervalId);
         } catch (error) {
             console.error('Error ejecutando alterTable:', error);
         }
-    }, 2000);
-    };
+    }, 1000);
+};
 
 main()
