@@ -74,6 +74,7 @@ class CalendarService {
         try {
             const now = new Date().toISOString();
             // Obtiene los datos utilizando getData
+            console.log(now)
             const data = await this.apiService.getData('/calendars/'+process.env.CALENDAR+'/events?q='+dni+'&timeMin='+now);
             if (data.items && data.items.length > 0) {
                 // Itera sobre todos los eventos encontrados

@@ -25,7 +25,7 @@ class Utilities {
         }
 
         const [year, month, day] = dateString.split('-');
-        
+
         // Validar que los componentes de la fecha sean válidos
         if (!year || !month || !day) {
             throw new Error('La fecha no tiene el formato YYYY-MM-DD.');
@@ -37,11 +37,11 @@ class Utilities {
 
     castDateFormat(dateString) {
         const [day, month, year] = dateString.split('/');
-    
+
         // Asegurarse de que el día y el mes tengan dos dígitos
         const formattedDay = day.padStart(2, '0');
         const formattedMonth = month.padStart(2, '0');
-    
+
         // Retornar la fecha con formato DD/MM/YYYY
         return `${formattedDay}/${formattedMonth}/${year}`;
     }
@@ -61,54 +61,56 @@ class Utilities {
         return inputDate.isSameOrAfter(today);
     }
 
-    generateTimeSlots(date, startTime, endTime, duration, lunchTimeStart, lunchTimeEnd, events) {
+    generateTimeSlots(date, startTime, endTime, duration, lunchTimeStart, lunchTimeEnd, events, maxEvents) {
         // Helper para convertir tiempo a minutos
         const timeToMinutes = (time) => {
             const [hours, minutes] = time.split(':').map(Number);
             return hours * 60 + minutes;
         };
-    
+
         // Helper para convertir minutos a formato "HH:mm"
         const minutesToTime = (minutes) => {
             const hours = Math.floor(minutes / 60);
             const mins = minutes % 60;
             return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
         };
-    
+
         // Obtener la fecha actual y los minutos actuales
         const currentDate = new Date();
         const currentMinutes = currentDate.getHours() * 60 + currentDate.getMinutes();
         const todayISODate1 = currentDate.toISOString().split('T')[0];
         const todayISODate = this.convertToDDMMYYYY(todayISODate1);
-    
+
         // Convertir eventos a rangos en minutos
         const eventRanges = events.map(event => {
             const eventStartMinutes = timeToMinutes(event.start.split('T')[1].slice(0, 5));
             const eventEndMinutes = timeToMinutes(event.end.split('T')[1].slice(0, 5));
             return { start: eventStartMinutes, end: eventEndMinutes };
         });
-    
+
         const startMinutes = timeToMinutes(startTime);
         const endMinutes = timeToMinutes(endTime);
         const durationMinutes = timeToMinutes(duration);
         const lunchStartMinutes = timeToMinutes(lunchTimeStart);
         const lunchEndMinutes = timeToMinutes(lunchTimeEnd);
-    
+
         const timeSlots = [];
         let slotStartMinutes = startMinutes;
-    
+
         while (slotStartMinutes + durationMinutes <= endMinutes) {
             const slotEndMinutes = slotStartMinutes + durationMinutes;
-    
+
             // Verificar si el rango actual está dentro del almuerzo
             const isLunchTime =
                 slotStartMinutes < lunchEndMinutes && slotEndMinutes > lunchStartMinutes;
-    
+
             // Verificar si el rango actual se solapa con algún evento
-            const isOverlappingEvent = eventRanges.some(event =>
+            const overlappingEvents = eventRanges.filter(event =>
                 !(slotEndMinutes <= event.start || slotStartMinutes >= event.end)
             );
-    
+
+            const isOverlappingEvent = overlappingEvents.length >= maxEvents;
+
             // Verificar si es la fecha actual y el rango está en el pasado
             const isPastTime =
                 date === todayISODate && slotStartMinutes < currentMinutes; // Comparar correctamente el inicio del rango
@@ -119,30 +121,30 @@ class Utilities {
                     `${minutesToTime(slotStartMinutes)} - ${minutesToTime(slotEndMinutes)}`
                 );
             }
-    
+
             slotStartMinutes += durationMinutes; // Avanzar al siguiente rango
         }
-    
+
         return timeSlots;
     }
-    
-    
+
+
 
     getDayOfWeek(dateString) {
         // Dividir el string de fecha 'DD/MM/YYYY' en sus componentes
         const [day, month, year] = dateString.split('/').map(Number);
-    
+
         // Crear un objeto Date utilizando el formato correcto
         const date = new Date(year, month - 1, day);
-    
+
         // Verificar si la fecha es válida
         if (isNaN(date)) {
             return 'Fecha inválida';
         }
-    
+
         // Obtener el día de la semana (0 = Domingo, 6 = Sábado)
         const dayOfWeek = date.getDay();
-    
+
         // Devolver 6 si es Sábado o 0 si es Domingo
         if (dayOfWeek === 6) {
             return 6; // Sábado
@@ -154,10 +156,10 @@ class Utilities {
     }
 
     getTimeSlot(number, timeSlots) {
-    
-        const selectedSlot = timeSlots[number-1]; // Obtener el ítem basado en el índice (ajustado a base 0)
+
+        const selectedSlot = timeSlots[number - 1]; // Obtener el ítem basado en el índice (ajustado a base 0)
         const match = selectedSlot.match(/(\d{2}:\d{2}) - (\d{2}:\d{2})/); // Usar regex para extraer las horas
-    
+
         const [_, startTime, endTime] = match; // Extraer las horas de inicio y fin
         return { startTime, endTime };
     }
@@ -175,7 +177,7 @@ class Utilities {
         }
         return result;
     }
-    
+
 }
 
 module.exports = Utilities;
