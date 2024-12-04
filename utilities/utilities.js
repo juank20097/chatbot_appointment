@@ -48,9 +48,10 @@ class Utilities {
 
     // Método para validar si una fecha tiene el formato DD/MM/YYYY
     validateDateFormat(dateString) {
-        // Usar moment para validar el formato de la fecha sin requerir ceros a la izquierda
-        const dateFormat = 'D/M/YYYY';  // El 'D' y 'M' permiten un solo dígito para el día y mes
-        return moment(dateString, dateFormat, true).isValid();
+        // Formatos permitidos
+        const allowedFormats = ['D/M/YYYY', 'DD/M/YYYY', 'D/MM/YYYY', 'DD/MM/YYYY'];
+        // Validar la fecha contra los formatos permitidos
+        return moment(dateString, allowedFormats, true).isValid();
     }
 
     // Método para validar si una fecha no es anterior a la fecha actual
