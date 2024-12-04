@@ -39,7 +39,7 @@ function startInactivityTimer(userId, gotoFlow, flowDynamic, ctx) {
       await gotoFlow(flowCierre).then(() => {
         console.log(`🔄 Redirigiendo a flowCierre para: ${userId}`);
       });
-    }, 15000), // 5 minutos en milisegundos
+    }, 300000), // 5 minutos en milisegundos
   };
 }
 
@@ -90,6 +90,31 @@ const flowAgain = addKeyword('')
   )
 
 /*--------------------------------flows de Cierre y Despedida------------------------------------------------*/
+const flowValidarCancelar = addKeyword('')
+  .addAnswer([
+    '⚠️ *¿Estás seguro que deseas cancelar tu cita?* ⚠️',
+    '',
+    '👉 *1.* Sí',
+    '👉 *2.* No'
+  ],
+    { capture: true },
+    async (ctx, { flowDynamic }) => {
+      const respuesta = ctx.body.trim();
+      console.log('✅ ayuda capturada:', respuesta);
+      if (respuesta === '1' || respuesta === 'si' || respuesta === 'SI' || respuesta === 'Si') {
+        // Llama al método para eliminar el evento
+        await serviceCalendar.cancelEvent(event.id);
+        // Mensaje de confirmación
+        await flowDynamic(`✅ ¡La cita ha sido cancelada exitosamente!\n\nPor favor, revisa tu correo electrónico para confirmar cualquier detalle relacionado con tu cita. 📧`);
+      } else if (respuesta === '2' || respuesta === 'no' || respuesta === 'No' || respuesta === 'NO') {
+        await flowDynamic('¡Genial! 😊 Nos alegra que mantengas tu cita con nosotros. ¡Nos vemos pronto! 👋');
+      } else {
+        return await flowDynamic('🚫 Lo siento, opción no válida!')
+      }
+    },
+    [flowAgain]
+  )
+
 
 const flowBuscarCita2 = addKeyword([dni])
   .addAction(async (ctx, { gotoFlow, flowDynamic }) => {
@@ -152,16 +177,11 @@ const flowBuscarCita2 = addKeyword([dni])
       const index = parseInt(respuesta, 10); // Convierte la respuesta a número
 
       // Verifica si el índice existe en el vector
-      const evento = eventsId.find((item) => item.index === index);
+      event = eventsId.find((item) => item.index === index);
 
-      if (evento) {
+      if (event) {
         try {
-          // Llama al método para eliminar el evento
-          await serviceCalendar.cancelEvent(evento.id);
-
-          // Mensaje de confirmación
-          await flowDynamic(`✅ ¡La cita ha sido cancelada exitosamente!\n\nPor favor, revisa tu correo electrónico para confirmar cualquier detalle relacionado con tu cita. 📧`);
-          return gotoFlow(flowAgain);
+          console.log('Evento existente');
         } catch (error) {
           console.error('Error al eliminar el evento:', error.message);
           await flowDynamic('⚠️ Hubo un problema al cancelar la cita. Por favor, inténtalo más tarde.');
@@ -170,9 +190,10 @@ const flowBuscarCita2 = addKeyword([dni])
       } else {
         // Si el índice no es válido, solicita intentarlo de nuevo
         await flowDynamic('😕 El número ingresado no corresponde a ningún evento.');
-        return fallBack(); // Reinicia el flujo para solicitar nuevamente
+        return gotoFlow(flowAgain);
       }
-    }
+    },
+    [flowValidarCancelar]
   )
 
 
@@ -455,21 +476,18 @@ const flowBuscarCita = addKeyword([''])
       } else {
         // No se encontró cita
         await flowDynamic(
-          '❌ No existe ninguna cita agendada con esa cédula o pasaporte.'
-        );
-        await flowDynamic(
-          '❗️ Verifica el dato que ingresaste y vuelve a i2ntentarlo. 🔄'
+          `❌ No existe ninguna cita agendada con la cédula o pasaporte: ${dni}`
         );
         return gotoFlow(flowAgain);
       }
     } catch (error) {
       // Manejo de errores
       console.error('Error al buscar eventos:', error.message);
-      return await flowDynamic(
+      await flowDynamic(
         '⚠️ Ocurrió un error al buscar la cita. Por favor, intenta nuevamente más tarde.'
       );
     }
-  });
+  })
 
 const flowVerificar = addKeyword(['2'])
   .addAction((ctx, { gotoFlow, flowDynamic }) => {
