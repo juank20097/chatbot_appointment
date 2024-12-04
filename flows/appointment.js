@@ -39,7 +39,7 @@ function startInactivityTimer(userId, gotoFlow, flowDynamic, ctx) {
       await gotoFlow(flowCierre).then(() => {
         console.log(`🔄 Redirigiendo a flowCierre para: ${userId}`);
       });
-    }, 300000), // 5 minutos en milisegundos
+    }, 15000), // 5 minutos en milisegundos
   };
 }
 
@@ -53,10 +53,10 @@ function clearInactivityTimer(userId) {
 /*------------------------------Métodos de cierre de sessión------------------------------------*/
 
 const flowCierre = addKeyword(['2', 'no'])
-  .addAction(async (ctx) => {
+  .addAction((ctx) => {
     const userId = ctx.from;
-    clearInactivityTimer(userId); // Limpiar el temporizador
-    console.log('⏳ Temporizador Limpiado.');
+    clearInactivityTimer(userId);
+    console.log('⏳ Temporizador Limpiado.')
   })
   .addAnswer(
     '¡Gracias por comunicarte! 😊 Si necesitas algo más, no dudes en contactarnos.')
@@ -75,21 +75,127 @@ const flowAgain = addKeyword('')
     '👉 *2.* No'
   ],
     { capture: true },
-    async (ctx, { gotoFlow, flowDynamic }) => {
+    async (ctx, { gotoFlow }) => {
       const respuesta = ctx.body.trim();
       console.log('✅ ayuda capturada:', respuesta);
       if (respuesta === '1' || respuesta === 'si' || respuesta === 'SI' || respuesta === 'Si') {
-        return await gotoFlow(flowOpciones);
+        return gotoFlow(flowOpciones);
       } else if (respuesta === '2' || respuesta === 'no' || respuesta === 'No' || respuesta === 'NO') {
-        console.log('🔄 ir a flowCierre');
+        console.log('🔄 ir flowCierre')
       } else {
-        return await flowDynamic('❌ Lo siento, la opción ingresada no está en la lista. 🚫');
+        return await flowDynamic('🚫 Lo siento, opción no válida!')
       }
     },
     [flowCierre]
   )
 
 /*--------------------------------flows de Cierre y Despedida------------------------------------------------*/
+
+const flowBuscarCita2 = addKeyword([dni])
+  .addAction(async (ctx, { gotoFlow, flowDynamic }) => {
+    const userId = ctx.from;
+    startInactivityTimer(userId, gotoFlow, flowDynamic, ctx); // Asegúrate de tener implementado `startInactivityTimer`
+
+    try {
+      // Llamada al servicio para buscar el evento
+      const data2 = await serviceCalendar.searchEventByDni(dni);
+
+      if (data2.items && data2.items.length > 0) {
+
+        const user2 = await serviceUser.getUserByDni(dni); // Asegúrate de tener este servicio configurado
+        const userName2 = user2 ? user2.name : 'usuario';
+
+        // Saludo al usuario con su nombre
+        await flowDynamic(
+          `👋 Hola, ${userName2}! Aquí tienes las citas agendadas:`
+        );
+        const now = new Date();
+        // Itera sobre todos los eventos encontrados
+        let index = 1;
+        for (let event of data2.items) {
+          const eventDateTime = new Date(event.start.dateTime);
+          // Validar si la hora del evento es posterior a la hora actual
+          if (eventDateTime > now) {
+            const { date, time } = utilities.formatDateTime(event.start.dateTime);
+
+            eventsId.push({ index, id: event.id });
+            // Envia un mensaje por cada evento válido
+            await flowDynamic(
+              `*${index})* 📌 Cita: *${event.summary}*\n` +
+              `📄 Descripción: *${event.description}*\n` +
+              `📅 Fecha de la Cita: *${date}*\n` + // Usamos solo la fecha
+              `⏰ Hora de la Cita: *${time}*\n`)   // Usamos solo la hora
+            index++;
+          }
+        }
+      } else {
+        // No se encontró cita
+        await flowDynamic(
+          '❌ No existe ninguna cita agendada con esa cédula o pasaporte.'
+        );
+        return gotoFlow(flowAgain);
+      }
+    } catch (error) {
+      // Manejo de errores
+      console.error('Error al buscar eventos:', error.message);
+      await flowDynamic(
+        '⚠️ Ocurrió un error al buscar la cita. Por favor, intenta nuevamente más tarde.'
+      );
+      return gotoFlow(flowAgain);
+    }
+  })
+  .addAnswer(
+    '📌 Por favor, ingresa el número de la cita que deseas cancelar:',
+    { capture: true },
+    async (ctx, { flowDynamic, gotoFlow, fallBack }) => {
+      const respuesta = ctx.body.trim(); // Captura la respuesta del usuario
+      const index = parseInt(respuesta, 10); // Convierte la respuesta a número
+
+      // Verifica si el índice existe en el vector
+      const evento = eventsId.find((item) => item.index === index);
+
+      if (evento) {
+        try {
+          // Llama al método para eliminar el evento
+          await serviceCalendar.cancelEvent(evento.id);
+
+          // Mensaje de confirmación
+          await flowDynamic(`✅ ¡La cita ha sido cancelada exitosamente!\n\nPor favor, revisa tu correo electrónico para confirmar cualquier detalle relacionado con tu cita. 📧`);
+          return gotoFlow(flowAgain);
+        } catch (error) {
+          console.error('Error al eliminar el evento:', error.message);
+          await flowDynamic('⚠️ Hubo un problema al cancelar la cita. Por favor, inténtalo más tarde.');
+          return gotoFlow(flowAgain);
+        }
+      } else {
+        // Si el índice no es válido, solicita intentarlo de nuevo
+        await flowDynamic('😕 El número ingresado no corresponde a ningún evento.');
+        return fallBack(); // Reinicia el flujo para solicitar nuevamente
+      }
+    }
+  )
+
+
+const flowCancelar = addKeyword(['4'])
+  .addAction((ctx, { gotoFlow, flowDynamic }) => {
+    const userId = ctx.from;
+    startInactivityTimer(userId, gotoFlow, flowDynamic, ctx);
+    dni = '';
+  })
+  .addAnswer('Lamentamos los inconvenientes. 😔 Estamos aquí para ayudarte con la cancelación de tu cita.')
+  .addAnswer(['📝 Ingresa tu cédula o pasaporte para buscar tu cita. 🔎',
+  ],
+    { capture: true },
+    async (ctx, { gotoFlow, flowDynamic }) => {
+      const userId = ctx.from;
+      startInactivityTimer(userId, gotoFlow, flowDynamic, ctx);
+      dni = ctx.body.trim();
+      console.log('✅ DNI capturada:', dni);
+    },
+    [flowBuscarCita2]
+  )
+
+/*--------------------------------4) Cancelar Cita------------------------------------------------*/
 
 const flowValidateDate2 = addKeyword([date])
   .addAction(async (ctx, { flowDynamic, gotoFlow }) => {
@@ -236,14 +342,15 @@ const flowBuscarCita3 = addKeyword([dni])
           const eventDateTime = new Date(event.start.dateTime);
           // Validar si la hora del evento es posterior a la hora actual
           if (eventDateTime > now) {
-            const formattedDate = utilities.formatDateTime(event.start.dateTime);
+            const { date, time } = utilities.formatDateTime(event.start.dateTime);
 
             eventsId.push({ index, id: event.id });
             // Envia un mensaje por cada evento válido
             await flowDynamic(
               `*${index})* 📌 Cita: *${event.summary}*\n` +
               `📄 Descripción: *${event.description}*\n` +
-              `⏰ Hora de la Cita: *${formattedDate}*\n`
+              `📅 Fecha de la Cita: *${date}*\n` + // Usamos solo la fecha
+              `⏰ Hora de la Cita: *${time}*\n`    // Usamos solo la hora
             );
             index++;
           }
@@ -306,111 +413,6 @@ const flowCambiar = addKeyword(['3'])
 
 /*--------------------------------3) Cambiar Cita------------------------------------------------*/
 
-const flowBuscarCita2 = addKeyword([dni])
-  .addAction(async (ctx, { gotoFlow, flowDynamic }) => {
-    const userId = ctx.from;
-    startInactivityTimer(userId, gotoFlow, flowDynamic, ctx); // Asegúrate de tener implementado `startInactivityTimer`
-
-    try {
-      // Llamada al servicio para buscar el evento
-      const data2 = await serviceCalendar.searchEventByDni(dni);
-
-      if (data2.items && data2.items.length > 0) {
-
-        const user2 = await serviceUser.getUserByDni(dni); // Asegúrate de tener este servicio configurado
-        const userName2 = user2 ? user2.name : 'usuario';
-
-        // Saludo al usuario con su nombre
-        await flowDynamic(
-          `👋 Hola, ${userName2}! Aquí tienes las citas agendadas:`
-        );
-        const now = new Date();
-        // Itera sobre todos los eventos encontrados
-        let index = 1;
-        for (let event of data2.items) {
-          const eventDateTime = new Date(event.start.dateTime);
-          // Validar si la hora del evento es posterior a la hora actual
-          if (eventDateTime > now) {
-            const formattedDate = utilities.formatDateTime(event.start.dateTime);
-
-            eventsId.push({ index, id: event.id });
-            // Envia un mensaje por cada evento válido
-            await flowDynamic(
-              `*${index})* 📌 Cita: *${event.summary}*\n` +
-              `📄 Descripción: *${event.description}*\n` +
-              `⏰ Hora de la Cita: *${formattedDate}*\n`
-            );
-            index++;
-          }
-        }
-      } else {
-        // No se encontró cita
-        await flowDynamic(
-          '❌ No existe ninguna cita agendada con esa cédula o pasaporte.'
-        );
-        return gotoFlow(flowAgain);
-      }
-    } catch (error) {
-      // Manejo de errores
-      console.error('Error al buscar eventos:', error.message);
-      await flowDynamic(
-        '⚠️ Ocurrió un error al buscar la cita. Por favor, intenta nuevamente más tarde.'
-      );
-      return gotoFlow(flowAgain);
-    }
-  })
-  .addAnswer(
-    '📌 Por favor, ingresa el número de la cita que deseas cancelar:',
-    { capture: true },
-    async (ctx, { flowDynamic, gotoFlow, fallBack }) => {
-      const respuesta = ctx.body.trim(); // Captura la respuesta del usuario
-      const index = parseInt(respuesta, 10); // Convierte la respuesta a número
-
-      // Verifica si el índice existe en el vector
-      const evento = eventsId.find((item) => item.index === index);
-
-      if (evento) {
-        try {
-          // Llama al método para eliminar el evento
-          await serviceCalendar.cancelEvent(evento.id);
-
-          // Mensaje de confirmación
-          await flowDynamic(`✅ ¡La cita ha sido cancelada exitosamente!\n\nPor favor, revisa tu correo electrónico para confirmar cualquier detalle relacionado con tu cita. 📧`);
-          return gotoFlow(flowAgain);
-        } catch (error) {
-          console.error('Error al eliminar el evento:', error.message);
-          await flowDynamic('⚠️ Hubo un problema al cancelar la cita. Por favor, inténtalo más tarde.');
-          return gotoFlow(flowAgain);
-        }
-      } else {
-        // Si el índice no es válido, solicita intentarlo de nuevo
-        await flowDynamic('😕 El número ingresado no corresponde a ningún evento.');
-        return fallBack(); // Reinicia el flujo para solicitar nuevamente
-      }
-    }
-  )
-
-
-const flowCancelar = addKeyword(['4'])
-  .addAction((ctx, { gotoFlow, flowDynamic }) => {
-    const userId = ctx.from;
-    startInactivityTimer(userId, gotoFlow, flowDynamic, ctx);
-    dni = '';
-  })
-  .addAnswer('Lamentamos los inconvenientes. 😔 Estamos aquí para ayudarte con la cancelación de tu cita.')
-  .addAnswer(['📝 Ingresa tu cédula o pasaporte para buscar tu cita. 🔎',
-  ],
-    { capture: true },
-    async (ctx, { gotoFlow, flowDynamic }) => {
-      const userId = ctx.from;
-      startInactivityTimer(userId, gotoFlow, flowDynamic, ctx);
-      dni = ctx.body.trim();
-      console.log('✅ DNI capturada:', dni);
-    },
-    [flowBuscarCita2]
-  )
-
-/*--------------------------------4) Cancelar Cita------------------------------------------------*/
 const flowBuscarCita = addKeyword([''])
   .addAction(async (ctx, { gotoFlow, flowDynamic }) => {
     const userId = ctx.from;
@@ -433,14 +435,17 @@ const flowBuscarCita = addKeyword([''])
         // Itera sobre todos los eventos encontrados
         for (let event of data.items) {
           const eventDateTime = new Date(event.start.dateTime);
+          console.log(now);
+          console.log(eventDateTime);
           // Validar si la hora del evento es posterior a la hora actual
           if (eventDateTime > now) {
-            const formattedDate = utilities.formatDateTime(event.start.dateTime);
+            const { date, time } = utilities.formatDateTime(event.start.dateTime);
             // Envia un mensaje por cada evento válido
             await flowDynamic(
               `📌 Cita: *${event.summary}*\n` +
               `📄 Descripción: *${event.description}*\n` +
-              `⏰ Hora de la Cita: *${formattedDate}*\n`
+              `📅 Fecha de la Cita: *${date}*\n` +
+              `⏰ Hora de la Cita: *${time}*\n`
             );
           }
         }
@@ -453,7 +458,7 @@ const flowBuscarCita = addKeyword([''])
           '❌ No existe ninguna cita agendada con esa cédula o pasaporte.'
         );
         await flowDynamic(
-          '❗️ Verifica el dato que ingresaste y vuelve a intentarlo. 🔄'
+          '❗️ Verifica el dato que ingresaste y vuelve a i2ntentarlo. 🔄'
         );
         return gotoFlow(flowAgain);
       }
@@ -512,14 +517,14 @@ const flowValidateUser = addKeyword('')
         await serviceUser.createUser(user.dni, user.name, user.email, user.cellphone);
         await serviceCalendar.createEvent(user.name, user.dni, user.email, date, startTimeF, endTimeF);
         await flowDynamic('🎉 ¡Cita agendada con éxito! 📅 Revisa tu correo para más detalles.');
-        return gotoFlow(flowAgain);
       } else if (respuesta === '2' || respuesta.toLowerCase() === 'no') {
         await flowDynamic('❌ Lamentamos que los datos no sean correctos. 🔄 ¡Volvamos a intentarlo! 😊');
         return gotoFlow(flowDni);
       } else {
-        return fallBack();
+        await flowDynamic('❌ La opción ingresada no existe! 😊');
       }
-    }
+    },
+    [flowAgain]
   );
 
 
@@ -571,7 +576,6 @@ const flowCreate = addKeyword('')
     if (user !== null) {
       await flowDynamic(`¡Hola ${user.name}! 👋 Un placer tenerte de nuevo.`)
       if (process.env.OtherEvent === 'false') {
-        console.log('Ingresa al for' + process.env.OtherEvent)
         try {
           // Buscar eventos de la cédula desde la fecha actual
           const events = await serviceCalendar.searchEventByDni(dni);
@@ -579,11 +583,13 @@ const flowCreate = addKeyword('')
             // Si existen eventos, mostrar los eventos encontrados
             await flowDynamic('🔔 Al parecer tu ya tienes una cita con nosotros:')
             for (let event of events.items) {
-              const formattedDate = utilities.formatDateTime(event.start.dateTime);
+              const { date, time } = utilities.formatDateTime(event.start.dateTime);
+              // Envia un mensaje por cada evento válido
               await flowDynamic(
                 `📌 Cita: *${event.summary}*\n` +
-                `📝 Descripción: *${event.description}*\n` +
-                `⏰ Hora de la Cita: *${formattedDate}*\n`
+                `📄 Descripción: *${event.description}*\n` +
+                `📅 Fecha de la Cita: *${date}*\n` +
+                `⏰ Hora de la Cita: *${time}*\n`
               );
             }
             await flowDynamic('🤝 Te esperamos con mucho gusto!')

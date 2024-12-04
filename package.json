@@ -22,6 +22,7 @@
         "express": "^4.21.1",
         "https": "^1.0.0",
         "moment": "^2.30.1",
+        "moment-timezone": "^0.5.46",
         "pg": "^8.13.1",
         "wa-sticker-formatter": "4.4.4"
     },
