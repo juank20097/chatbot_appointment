@@ -14,13 +14,13 @@ services:
       - db:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d postgres" ]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 5s
 
-# Github: https://github.com/juank20097/chatbot_appointment   ///   docker build -t chatbot_appointment:latest . 
+  # Github: https://github.com/juank20097/chatbot_appointment   ///   docker build -t chatbot_appointment:latest . 
   chatbot-appointment:
     image: chatbot_appointment
     container_name: chatbot-appointment
@@ -31,7 +31,7 @@ services:
         condition: service_started
     ports:
       - "3000:3000"
-    restart: always  
+    restart: always
     environment:
       - POSTGRES_DB_HOST=postgres
       - POSTGRES_DB_USER=postgres
@@ -51,7 +51,7 @@ services:
       - SundayWork=false
       - OtherEvent=false
       - NumberEvents=1
-      - BlackList=["01/01/2024", "12/02/2024", "13/02/2024", "29/03/2024", "01/05/2024", "24/05/2024", "10/08/2024", "09/10/2024", "02/11/2024", "03/11/2024", "25/12/2024"]
+      - BlackList=["25/12/2024", "01/01/2025", "03/03/2025", "04/03/2025", "18/04/2025", "01/05/2025", "24/05/2025", "10/08/2025", "09/10/2025", "02/11/2025", "03/11/2025", "25/12/2025"]
 
 volumes:
   db:
