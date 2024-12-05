@@ -27,8 +27,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      ws-permission-back:
-        condition: service_started
     ports:
       - "3000:3000"
     restart: always
