@@ -12,9 +12,6 @@ RUN apt-get update && apt-get install -y \
     update-ca-certificates --fresh && \
     npm config set strict-ssl false
 
-# Configurar entorno para ignorar certificados autofirmados (si es necesario)
-ENV NODE_TLS_REJECT_UNAUTHORIZED=0
-
 # Cambiar timezone al servidor
 ENV TZ=America/Guayaquil
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
