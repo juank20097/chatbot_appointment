@@ -4,9 +4,6 @@ services:
   chatbot-appointment:
     image: chatbot_appointment
     container_name: chatbot-appointment
-    depends_on:
-      postgres:
-        condition: service_healthy
     ports:
       - "3000:3000"
     restart: always
