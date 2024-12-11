@@ -17,7 +17,7 @@ const main = async () => {
         database: process.env.POSTGRES_DB_NAME,
         password: process.env.POSTGRES_DB_PASSWORD,
         port: process.env.POSTGRES_DB_PORT,
-        //ssl: { rejectUnauthorized: false },
+        ssl: { rejectUnauthorized: false },
     })
     const adapterFlow = createFlow([flowPrincipal])
     const adapterProvider = createProvider(BaileysProvider)
