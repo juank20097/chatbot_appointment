@@ -1,25 +1,5 @@
 version: '3.8'
 services:
-  postgres:
-    container_name: postgres
-    image: postgres:15
-    restart: always
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=root
-      - POSTGRES_DB=postgres
-    ports:
-      - 5432:5432
-    volumes:
-      - db:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres -d postgres" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
-
   # Github: https://github.com/juank20097/chatbot_appointment   ///   docker build -t chatbot_appointment:latest . 
   chatbot-appointment:
     image: chatbot_appointment
@@ -50,7 +30,3 @@ services:
       - OtherEvent=false
       - NumberEvents=1
       - BlackList=["25/12/2024", "01/01/2025", "03/03/2025", "04/03/2025", "18/04/2025", "01/05/2025", "24/05/2025", "10/08/2025", "09/10/2025", "02/11/2025", "03/11/2025", "25/12/2025"]
-
-volumes:
-  db:
-    driver: local
