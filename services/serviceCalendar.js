@@ -155,7 +155,7 @@ class CalendarService {
 
             // Realizamos la solicitud de actualización a la API de Google Calendar
             const response = await this.apiService.putData(
-                `/calendars/3080d2bac0049788c9b0be91f201de5c485906617b2da1951f7c776ed27ec3a2@group.calendar.google.com/events/${eventId}?sendUpdates=all&sendNotifications=true`,
+                '/calendars/'+ process.env.CALENDAR +`/events/${eventId}?sendUpdates=all&sendNotifications=true`,
                 updatedEventDataJson
             );
 

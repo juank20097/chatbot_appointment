@@ -75,7 +75,7 @@ const flowAgain = addKeyword('')
     '👉 *2.* No'
   ],
     { capture: true },
-    async (ctx, { gotoFlow }) => {
+    async (ctx, { gotoFlow, flowDynamic }) => {
       const respuesta = ctx.body.trim();
       console.log('✅ ayuda capturada:', respuesta);
       if (respuesta === '1' || respuesta === 'si' || respuesta === 'SI' || respuesta === 'Si') {
